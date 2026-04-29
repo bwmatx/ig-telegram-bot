@@ -6,6 +6,7 @@ const { downloadWithBrowser } = require("./services/browser");
 const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
+console.log("TOKEN:", process.env.BOT_TOKEN);
 console.log("Bot berjalan... 🚀");
 
 bot.on("message", async (msg) => {
