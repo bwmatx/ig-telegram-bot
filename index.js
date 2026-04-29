@@ -24,7 +24,7 @@ bot.on("message", async (msg) => {
   const isInstagramLink = /instagram\.com\/(reel|p|stories)/.test(text);
   if (!isInstagramLink) return;
 
-  bot.sendMessage(chatId, "⏳ Sedang diproses...");
+  bot.sendMessage(chatId, "Sabar Cok!!!");
 
   try {
     const links = await downloadWithBrowser(text);
