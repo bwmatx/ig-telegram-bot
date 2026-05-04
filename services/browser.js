@@ -20,12 +20,13 @@ async function downloadWithBrowser(url) {
       await page.type('input#s_input', cleanUrl);
       await page.click('button.btn-default');
 
-      // Tunggu sampai hasil muncul
-      await page.waitForSelector(".download-items", { timeout: 20000 });
-      
+      // Tunggu sampai hasil muncul (Thumbnail biasanya muncul duluan)
+      await page.waitForSelector(".download-items", { timeout: 30000 });
+      await new Promise(r => setTimeout(r, 2000)); // Beri waktu tambahan agar item ter-render
+
       // Jika ada modal yang menutupi
       try {
-        const closeBtn = await page.$(".modal-close, #dlModal .close, .btn-close");
+        const closeBtn = await page.$(".modal-close, #dlModal .close, .btn-close, #closeModalBtn");
         if (closeBtn) {
           console.log("Menutup modal...");
           await closeBtn.click();
@@ -34,19 +35,17 @@ async function downloadWithBrowser(url) {
       } catch (e) {}
 
       // Ambil link secara cerdas: satu link per blok item
-      const links = await page.$$eval(".download-items .column, .download-items__item", (blocks) => {
+      const links = await page.$$eval(".download-items .column, .download-items > div", (blocks) => {
         const result = [];
         blocks.forEach(block => {
-          const videoBtn = block.querySelector('a[title="Download Video"]');
-          const photoBtn = block.querySelector('a[title="Download Photo"], a[title="Download Image"]');
-          const thumbnailBtn = block.querySelector('a[title="Download Thumbnail"]');
+          // Hanya proses blok yang berisi tombol download
+          const videoBtn = block.querySelector('a[title="Download Video"], a[href*=".mp4"]');
+          const photoBtn = block.querySelector('a[title="Download Photo"], a[title="Download Image"], a[href*=".jpg"], a[href*=".jpeg"]');
           
           if (videoBtn) {
             result.push(videoBtn.href);
           } else if (photoBtn) {
             result.push(photoBtn.href);
-          } else if (thumbnailBtn) {
-            result.push(thumbnailBtn.href);
           }
         });
         return result;
@@ -55,7 +54,7 @@ async function downloadWithBrowser(url) {
       await browser.close();
       
       // Hapus duplikat dan pastikan ada isinya
-      const uniqueLinks = [...new Set(links)].filter(l => l && l !== "#");
+      const uniqueLinks = [...new Set(links)].filter(l => l && l.startsWith("http") && !l.includes("javascript"));
       console.log(`Berhasil mendapatkan ${uniqueLinks.length} item.`);
       return uniqueLinks;
 

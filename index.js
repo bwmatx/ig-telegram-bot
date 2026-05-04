@@ -56,20 +56,14 @@ bot.on("message", async (msg) => {
         console.log("Content-Type:", contentType);
 
         if (contentType && contentType.includes("video")) {
-          await bot.sendVideo(chatId, response.data, {
-            caption: isReel ? "Berhasil diunduh!" : undefined
-          });
+          await bot.sendVideo(chatId, response.data);
           successCount++;
           if (isReel) break; 
         } else if (contentType && contentType.includes("image")) {
-          await bot.sendPhoto(chatId, response.data, {
-            caption: isPost ? "Berhasil diunduh!" : undefined
-          });
+          await bot.sendPhoto(chatId, response.data);
           successCount++;
         } else {
-          await bot.sendDocument(chatId, response.data, {
-            caption: "Berhasil diunduh!"
-          });
+          await bot.sendDocument(chatId, response.data);
           successCount++;
           if (isReel) break;
         }
