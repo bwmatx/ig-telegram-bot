@@ -21,10 +21,20 @@ async function downloadWithBrowser(url) {
       await page.click('button.btn-default');
 
       // Tunggu sampai hasil muncul
-      await page.waitForSelector(".download-items", { timeout: 15000 });
+      await page.waitForSelector(".download-items", { timeout: 20000 });
       
+      // Jika ada modal yang menutupi
+      try {
+        const closeBtn = await page.$(".modal-close, #dlModal .close, .btn-close");
+        if (closeBtn) {
+          console.log("Menutup modal...");
+          await closeBtn.click();
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      } catch (e) {}
+
       // Ambil link secara cerdas: satu link per blok item
-      const links = await page.$$eval(".download-items .col-md-4, .download-items .col-sm-6, .download-items .col-xs-12", (blocks) => {
+      const links = await page.$$eval(".download-items .column, .download-items__item", (blocks) => {
         const result = [];
         blocks.forEach(block => {
           const videoBtn = block.querySelector('a[title="Download Video"]');
@@ -36,7 +46,6 @@ async function downloadWithBrowser(url) {
           } else if (photoBtn) {
             result.push(photoBtn.href);
           } else if (thumbnailBtn) {
-            // Fallback jika hanya ada thumbnail (jarang terjadi untuk postingan murni foto)
             result.push(thumbnailBtn.href);
           }
         });
@@ -46,7 +55,7 @@ async function downloadWithBrowser(url) {
       await browser.close();
       
       // Hapus duplikat dan pastikan ada isinya
-      const uniqueLinks = [...new Set(links)].filter(l => l);
+      const uniqueLinks = [...new Set(links)].filter(l => l && l !== "#");
       console.log(`Berhasil mendapatkan ${uniqueLinks.length} item.`);
       return uniqueLinks;
 
