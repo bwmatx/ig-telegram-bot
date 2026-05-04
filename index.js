@@ -35,16 +35,37 @@ bot.on("message", async (msg) => {
       return bot.sendMessage(chatId, "Link tidak ditemukan 😢");
     }
 
-    // Coba satu per satu link yang ditemukan sampai ada yang berhasil
+    // Coba urutkan link agar video didahulukan jika itu Reel
+    let sortedLinks = [...links];
+    const isReel = text.includes("/reel/") || text.includes("/reels/");
+    const isPost = text.includes("/p/");
+    const isStory = text.includes("/stories/");
+
+    if (isReel) {
+      // Prioritaskan link yang mengandung .mp4 atau video
+      sortedLinks.sort((a, b) => {
+        const aIsVideo = a.includes(".mp4") || a.includes("video");
+        const bIsVideo = b.includes(".mp4") || b.includes("video");
+        return bIsVideo - aIsVideo;
+      });
+    } else if (isPost) {
+      // Prioritaskan link yang mengandung .jpg/.png atau image
+      sortedLinks.sort((a, b) => {
+        const aIsImage = a.includes(".jpg") || a.includes(".jpeg") || a.includes("image");
+        const bIsImage = b.includes(".jpg") || b.includes(".jpeg") || b.includes("image");
+        return bIsImage - aIsImage;
+      });
+    }
+
     let success = false;
-    for (const videoUrl of links) {
+    for (const videoUrl of sortedLinks) {
       try {
         console.log("Mencoba download dari:", videoUrl);
         const response = await axios.get(videoUrl, {
           responseType: "stream",
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-            "Referer": "https://snapsave.app/"
+            "Referer": "https://savevid.net/"
           },
           timeout: 60000
         });
@@ -56,18 +77,26 @@ bot.on("message", async (msg) => {
           await bot.sendVideo(chatId, response.data, {
             caption: "Berhasil diunduh! 🚀"
           });
+          success = true;
+          break;
         } else if (contentType && contentType.includes("image")) {
+          // Jika ini Reel tapi kita malah dapet gambar, coba cari link lain dulu
+          if (isReel && sortedLinks.length > 1 && !videoUrl.includes(".mp4")) {
+            console.log("Dapat gambar untuk Reel, mencoba link lain untuk mencari video...");
+            continue; 
+          }
           await bot.sendPhoto(chatId, response.data, {
             caption: "Berhasil diunduh! 🚀"
           });
+          success = true;
+          break;
         } else {
           await bot.sendDocument(chatId, response.data, {
             caption: "Berhasil diunduh! (Dokumen) 🚀"
           });
+          success = true;
+          break;
         }
-        
-        success = true;
-        break; // Berhenti jika berhasil
 
       } catch (downloadErr) {
         console.error("Gagal download dari link ini, mencoba link berikutnya...", downloadErr.message);
