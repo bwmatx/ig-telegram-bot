@@ -17,7 +17,7 @@ bot.on("message", async (msg) => {
 
   // handle /start
   if (text === "/start") {
-    return bot.sendMessage(chatId, "Kirim link Instagram langsung ya 🚀");
+    return bot.sendMessage(chatId, "Kirim link Instagram");
   }
 
   // validasi link IG (lebih rapi)
@@ -32,33 +32,42 @@ bot.on("message", async (msg) => {
     console.log("Hasil links:", links);
 
     if (links.length === 0) {
-      return bot.sendMessage(chatId, "Link tidak ditemukan 😢");
+      return bot.sendMessage(chatId, "Link tidak ditemukan");
     }
 
-    // Coba urutkan link agar video didahulukan jika itu Reel
-    let sortedLinks = [...links];
+    // Filter link agar tidak ganda (misal thumbnail + video untuk item yang sama)
+    let filteredLinks = [];
+    const videoLinks = links.filter(l => l.includes(".mp4") || l.includes("video"));
+    const imageLinks = links.filter(l => l.includes(".jpg") || l.includes(".jpeg") || l.includes("image"));
+
     const isReel = text.includes("/reel/") || text.includes("/reels/");
     const isPost = text.includes("/p/");
     const isStory = text.includes("/stories/");
 
     if (isReel) {
-      // Prioritaskan link yang mengandung .mp4 atau video
-      sortedLinks.sort((a, b) => {
-        const aIsVideo = a.includes(".mp4") || a.includes("video");
-        const bIsVideo = b.includes(".mp4") || b.includes("video");
-        return bIsVideo - aIsVideo;
-      });
-    } else if (isPost) {
-      // Prioritaskan link yang mengandung .jpg/.png atau image
-      sortedLinks.sort((a, b) => {
-        const aIsImage = a.includes(".jpg") || a.includes(".jpeg") || a.includes("image");
-        const bIsImage = b.includes(".jpg") || b.includes(".jpeg") || b.includes("image");
-        return bIsImage - aIsImage;
-      });
+      // Untuk Reel, ambil video pertama saja
+      filteredLinks = videoLinks.length > 0 ? [videoLinks[0]] : [imageLinks[0]];
+    } else if (isPost || isStory) {
+      // Jika ada video, kita utamakan video dan abaikan gambar (thumbnail)
+      if (videoLinks.length > 0) {
+        filteredLinks = [...videoLinks];
+      } else {
+        filteredLinks = [...imageLinks];
+      }
+      if (filteredLinks.length === 0) filteredLinks = links; 
+    } else {
+      filteredLinks = links;
     }
 
+    // Urutkan (Video duluan)
+    filteredLinks.sort((a, b) => {
+      const aIsVideo = a.includes(".mp4") || a.includes("video");
+      const bIsVideo = b.includes(".mp4") || b.includes("video");
+      return bIsVideo - aIsVideo;
+    });
+
     let successCount = 0;
-    for (const videoUrl of sortedLinks) {
+    for (const videoUrl of filteredLinks) {
       try {
         console.log("Mencoba download dari:", videoUrl);
         const response = await axios.get(videoUrl, {
@@ -75,27 +84,18 @@ bot.on("message", async (msg) => {
 
         if (contentType && contentType.includes("video")) {
           await bot.sendVideo(chatId, response.data, {
-            caption: isReel ? "Berhasil diunduh! 🚀" : undefined
+            caption: isReel ? "Berhasil diunduh!" : undefined
           });
           successCount++;
-          if (isReel) break; // Reel cukup satu saja (video)
+          if (isReel) break; 
         } else if (contentType && contentType.includes("image")) {
-          // Jika ini Reel tapi kita malah dapet gambar, coba cari link lain dulu
-          if (isReel && sortedLinks.length > 1 && !videoUrl.includes(".mp4")) {
-            console.log("Dapat gambar untuk Reel, mencoba link lain untuk mencari video...");
-            continue; 
-          }
           await bot.sendPhoto(chatId, response.data, {
-            caption: isPost ? "Berhasil diunduh! 🚀" : undefined
+            caption: isPost ? "Berhasil diunduh!" : undefined
           });
           successCount++;
-          if (isPost && !isStory) {
-              // Untuk postingan biasa (p), biasanya satu-satu atau carousel. 
-              // Jika ingin kirim semua, jangan break.
-          }
         } else {
           await bot.sendDocument(chatId, response.data, {
-            caption: "Berhasil diunduh! (Dokumen) 🚀"
+            caption: "Berhasil diunduh!"
           });
           successCount++;
           if (isReel) break;
@@ -108,9 +108,9 @@ bot.on("message", async (msg) => {
     }
 
     if (successCount === 0) {
-      bot.sendMessage(chatId, "Gagal mengunduh media dari semua link yang tersedia 😢");
+      bot.sendMessage(chatId, "Gagal mengunduh media dari semua link yang tersedia");
     } else if (isStory || isPost) {
-      bot.sendMessage(chatId, `Berhasil mengunduh ${successCount} media! 🚀`);
+      bot.sendMessage(chatId, `Berhasil mengunduh ${successCount} media!`);
     }
 
   } catch (err) {
@@ -119,6 +119,6 @@ bot.on("message", async (msg) => {
     if (err.code === 'ENOTFOUND') {
         errorMsg = "Server download tidak dapat dijangkau (DNS Error). Coba lagi nanti atau gunakan link lain.";
     }
-    bot.sendMessage(chatId, `Terjadi error: ${errorMsg} 😢`);
+    bot.sendMessage(chatId, `Terjadi error: ${errorMsg}`);
   }
 });
