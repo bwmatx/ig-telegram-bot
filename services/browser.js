@@ -22,14 +22,33 @@ async function downloadWithBrowser(url) {
 
       // Tunggu sampai hasil muncul
       await page.waitForSelector(".download-items", { timeout: 15000 });
-      const links = await page.$$eval("a", (els) => 
-        els.map(e => e.href).filter(h => h && h.includes("cdn"))
-      );
+      
+      // Ambil link secara cerdas: satu link per blok item
+      const links = await page.$$eval(".download-items .col-md-4, .download-items .col-sm-6, .download-items .col-xs-12", (blocks) => {
+        const result = [];
+        blocks.forEach(block => {
+          const videoBtn = block.querySelector('a[title="Download Video"]');
+          const photoBtn = block.querySelector('a[title="Download Photo"], a[title="Download Image"]');
+          const thumbnailBtn = block.querySelector('a[title="Download Thumbnail"]');
+          
+          if (videoBtn) {
+            result.push(videoBtn.href);
+          } else if (photoBtn) {
+            result.push(photoBtn.href);
+          } else if (thumbnailBtn) {
+            // Fallback jika hanya ada thumbnail (jarang terjadi untuk postingan murni foto)
+            result.push(thumbnailBtn.href);
+          }
+        });
+        return result;
+      });
       
       await browser.close();
       
-      // Kembalikan link unik
-      return [...new Set(links)];
+      // Hapus duplikat dan pastikan ada isinya
+      const uniqueLinks = [...new Set(links)].filter(l => l);
+      console.log(`Berhasil mendapatkan ${uniqueLinks.length} item.`);
+      return uniqueLinks;
 
     } catch (e) {
       console.log("SaveVid error atau timeout:", e.message);

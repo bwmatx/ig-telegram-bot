@@ -7,7 +7,7 @@ const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
 // console.log("TOKEN:", process.env.BOT_TOKEN); // Removed for security
-console.log("Bot berjalan... 🚀");
+console.log("Bot berjalan...");
 
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
@@ -35,39 +35,12 @@ bot.on("message", async (msg) => {
       return bot.sendMessage(chatId, "Link tidak ditemukan");
     }
 
-    // Filter link agar tidak ganda (misal thumbnail + video untuk item yang sama)
-    let filteredLinks = [];
-    const videoLinks = links.filter(l => l.includes(".mp4") || l.includes("video"));
-    const imageLinks = links.filter(l => l.includes(".jpg") || l.includes(".jpeg") || l.includes("image"));
-
     const isReel = text.includes("/reel/") || text.includes("/reels/");
     const isPost = text.includes("/p/");
     const isStory = text.includes("/stories/");
 
-    if (isReel) {
-      // Untuk Reel, ambil video pertama saja
-      filteredLinks = videoLinks.length > 0 ? [videoLinks[0]] : [imageLinks[0]];
-    } else if (isPost || isStory) {
-      // Jika ada video, kita utamakan video dan abaikan gambar (thumbnail)
-      if (videoLinks.length > 0) {
-        filteredLinks = [...videoLinks];
-      } else {
-        filteredLinks = [...imageLinks];
-      }
-      if (filteredLinks.length === 0) filteredLinks = links; 
-    } else {
-      filteredLinks = links;
-    }
-
-    // Urutkan (Video duluan)
-    filteredLinks.sort((a, b) => {
-      const aIsVideo = a.includes(".mp4") || a.includes("video");
-      const bIsVideo = b.includes(".mp4") || b.includes("video");
-      return bIsVideo - aIsVideo;
-    });
-
     let successCount = 0;
-    for (const videoUrl of filteredLinks) {
+    for (const videoUrl of links) {
       try {
         console.log("Mencoba download dari:", videoUrl);
         const response = await axios.get(videoUrl, {
