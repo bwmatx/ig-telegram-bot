@@ -71,4 +71,51 @@ async function downloadWithBrowser(url) {
   }
 }
 
-module.exports = { downloadWithBrowser };
+// TikTok downloader menggunakan tikwm.com API (tidak perlu Puppeteer)
+const axios = require("axios");
+
+async function downloadTikTok(url) {
+  try {
+    console.log("Mencoba TikWM API...");
+    const cleanUrl = url.split("?")[0];
+
+    const res = await axios.post(
+      "https://www.tikwm.com/api/",
+      new URLSearchParams({ url: cleanUrl, hd: 1 }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Mozilla/5.0"
+        },
+        timeout: 15000
+      }
+    );
+
+    const data = res.data?.data;
+    if (!data) {
+      console.log("TikWM tidak mengembalikan data.");
+      return [];
+    }
+
+    const results = [];
+
+    // Cek apakah postingan foto/slide (images array)
+    if (data.images && data.images.length > 0) {
+      for (const imgUrl of data.images) {
+        results.push({ url: imgUrl, type: "image" });
+      }
+    } else if (data.play) {
+      // Video tanpa watermark
+      results.push({ url: data.play, type: "video" });
+    }
+
+    console.log(`TikTok: Berhasil mendapatkan ${results.length} item.`);
+    return results;
+
+  } catch (err) {
+    console.log("TikWM error:", err.message);
+    return [];
+  }
+}
+
+module.exports = { downloadWithBrowser, downloadTikTok };

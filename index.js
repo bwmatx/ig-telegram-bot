@@ -1,7 +1,7 @@
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
-const { downloadWithBrowser } = require("./services/browser");
+const { downloadWithBrowser, downloadTikTok } = require("./services/browser");
 
 const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
@@ -27,11 +27,21 @@ bot.on("callback_query", async (query) => {
 
     bot.answerCallbackQuery(query.id, { text: "Memproses..." });
 
-    if (index === "all") {
-      await sendMediaLinks(chatId, cache.links, cache.url);
+    if (cache.isTikTok) {
+      // TikTok: items adalah array of {url, type}
+      if (index === "all") {
+        await sendTikTokItems(chatId, cache.items);
+      } else {
+        await sendTikTokItems(chatId, [cache.items[parseInt(index)]]);
+      }
     } else {
-      const selectedIndex = parseInt(index);
-      await sendMediaLinks(chatId, [cache.links[selectedIndex]], cache.url);
+      // Instagram: links adalah array of url string
+      if (index === "all") {
+        await sendMediaLinks(chatId, cache.links, cache.url);
+      } else {
+        const selectedIndex = parseInt(index);
+        await sendMediaLinks(chatId, [cache.links[selectedIndex]], cache.url);
+      }
     }
   }
 });
@@ -45,45 +55,66 @@ bot.on("message", async (msg) => {
 
   // handle /start
   if (text === "/start") {
-    return bot.sendMessage(chatId, "Kirim link Instagram langsung ya");
+    return bot.sendMessage(chatId, "Kirim link Instagram atau TikTok langsung ya");
   }
 
-  // validasi link IG
+  // Auto-deteksi platform
   const isInstagramLink = /instagram\.com\/(reel|reels|p|stories|tv)/.test(text);
-  if (!isInstagramLink) return;
+  const isTikTokLink = /tiktok\.com\//.test(text) || /vm\.tiktok\.com\//.test(text);
+  if (!isInstagramLink && !isTikTokLink) return;
 
   bot.sendMessage(chatId, "Sabar Cok!!!");
 
   try {
-    const links = await downloadWithBrowser(text);
-    console.log("Hasil links:", links);
+    if (isTikTokLink) {
+      // --- TIKTOK ---
+      const items = await downloadTikTok(text);
+      console.log("TikTok items:", items.length);
 
-    if (links.length === 0) {
-      return bot.sendMessage(chatId, "Link tidak ditemukan");
-    }
-
-    if (links.length > 1) {
-      const cacheId = Math.random().toString(36).substring(7);
-      mediaCache[cacheId] = { links, url: text };
-
-      // Buat tombol slide
-      const buttons = [];
-      for (let i = 0; i < links.length; i++) {
-        buttons.push({ text: `Slide ${i + 1}`, callback_data: `slide_${cacheId}_${i}` });
+      if (items.length === 0) {
+        return bot.sendMessage(chatId, "Link TikTok tidak ditemukan atau tidak didukung");
       }
-      
-      // Susun tombol (maks 3 per baris)
-      const rows = [];
-      for (let i = 0; i < buttons.length; i += 3) {
-        rows.push(buttons.slice(i, i + 3));
-      }
-      rows.push([{ text: "Download Semua", callback_data: `slide_${cacheId}_all` }]);
 
-      return bot.sendMessage(chatId, `Ditemukan ${links.length} media. Mau download yang mana?`, {
-        reply_markup: { inline_keyboard: rows }
-      });
+      if (items.length > 1) {
+        const cacheId = Math.random().toString(36).substring(7);
+        mediaCache[cacheId] = { items, url: text, isTikTok: true };
+
+        const buttons = items.map((_, i) => ({ text: `Slide ${i + 1}`, callback_data: `slide_${cacheId}_${i}` }));
+        const rows = [];
+        for (let i = 0; i < buttons.length; i += 3) rows.push(buttons.slice(i, i + 3));
+        rows.push([{ text: "Download Semua", callback_data: `slide_${cacheId}_all` }]);
+
+        return bot.sendMessage(chatId, `TikTok: Ditemukan ${items.length} foto. Mau download yang mana?`, {
+          reply_markup: { inline_keyboard: rows }
+        });
+      } else {
+        await sendTikTokItems(chatId, items);
+      }
+
     } else {
-      await sendMediaLinks(chatId, links, text);
+      // --- INSTAGRAM ---
+      const links = await downloadWithBrowser(text);
+      console.log("Hasil links:", links);
+
+      if (links.length === 0) {
+        return bot.sendMessage(chatId, "Link tidak ditemukan");
+      }
+
+      if (links.length > 1) {
+        const cacheId = Math.random().toString(36).substring(7);
+        mediaCache[cacheId] = { links, url: text, isTikTok: false };
+
+        const buttons = links.map((_, i) => ({ text: `Slide ${i + 1}`, callback_data: `slide_${cacheId}_${i}` }));
+        const rows = [];
+        for (let i = 0; i < buttons.length; i += 3) rows.push(buttons.slice(i, i + 3));
+        rows.push([{ text: "Download Semua", callback_data: `slide_${cacheId}_all` }]);
+
+        return bot.sendMessage(chatId, `Ditemukan ${links.length} media. Mau download yang mana?`, {
+          reply_markup: { inline_keyboard: rows }
+        });
+      } else {
+        await sendMediaLinks(chatId, links, text);
+      }
     }
 
   } catch (err) {
@@ -135,5 +166,33 @@ async function sendMediaLinks(chatId, links, originalText) {
 
     if (successCount === 0) {
       bot.sendMessage(chatId, "Gagal mengunduh media");
+    }
+}
+
+// Helper untuk mengirim item TikTok (typed: {url, type})
+async function sendTikTokItems(chatId, items) {
+    let successCount = 0;
+    for (const item of items) {
+      try {
+        console.log("TikTok download:", item.url, "|", item.type);
+        const response = await axios.get(item.url, {
+          responseType: "stream",
+          headers: { "User-Agent": "Mozilla/5.0" },
+          timeout: 60000
+        });
+
+        if (item.type === "video") {
+          await bot.sendVideo(chatId, response.data);
+        } else {
+          await bot.sendPhoto(chatId, response.data);
+        }
+        successCount++;
+      } catch (e) {
+        console.error("TikTok download error:", e.message);
+      }
+    }
+
+    if (successCount === 0) {
+      bot.sendMessage(chatId, "Gagal mengunduh media TikTok");
     }
 }
