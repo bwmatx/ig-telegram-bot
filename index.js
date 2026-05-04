@@ -6,7 +6,7 @@ const { downloadWithBrowser } = require("./services/browser");
 const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-console.log("TOKEN:", process.env.BOT_TOKEN);
+// console.log("TOKEN:", process.env.BOT_TOKEN); // Removed for security
 console.log("Bot berjalan... 🚀");
 
 bot.on("message", async (msg) => {
@@ -21,7 +21,7 @@ bot.on("message", async (msg) => {
   }
 
   // validasi link IG (lebih rapi)
-  const isInstagramLink = /instagram\.com\/(reel|p|stories)/.test(text);
+  const isInstagramLink = /instagram\.com\/(reel|reels|p|stories|tv)/.test(text);
   if (!isInstagramLink) return;
 
   bot.sendMessage(chatId, "Sabar Cok!!!");
@@ -40,14 +40,36 @@ bot.on("message", async (msg) => {
     const response = await axios.get(videoUrl, {
       responseType: "stream",
       headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+        "Referer": "https://snapsave.app/"
+      },
+      timeout: 60000
     });
 
-    await bot.sendVideo(chatId, response.data);
+    const contentType = response.headers["content-type"];
+    console.log("Content-Type:", contentType);
+
+    if (contentType && contentType.includes("video")) {
+      await bot.sendVideo(chatId, response.data, {
+        caption: "Berhasil diunduh! 🚀"
+      });
+    } else if (contentType && contentType.includes("image")) {
+      await bot.sendPhoto(chatId, response.data, {
+        caption: "Berhasil diunduh! 🚀"
+      });
+    } else {
+      // fallback jika content-type tidak jelas, coba kirim sebagai dokumen
+      await bot.sendDocument(chatId, response.data, {
+        caption: "Berhasil diunduh! (Dokumen) 🚀"
+      });
+    }
 
   } catch (err) {
-    console.log("Error:", err.message);
-    bot.sendMessage(chatId, "Terjadi error 😢");
+    console.error("Error Detail:", err);
+    let errorMsg = err.message;
+    if (err.code === 'ENOTFOUND') {
+        errorMsg = "Server download tidak dapat dijangkau (DNS Error). Coba lagi nanti atau gunakan link lain.";
+    }
+    bot.sendMessage(chatId, `Terjadi error: ${errorMsg} 😢`);
   }
 });

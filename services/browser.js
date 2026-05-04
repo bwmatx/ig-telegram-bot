@@ -2,50 +2,65 @@ const puppeteer = require("puppeteer");
 
 async function downloadWithBrowser(url) {
   const browser = await puppeteer.launch({
-    headless: true, // nanti bisa false kalau mau lihat browsernya
+    headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
   });
 
   const page = await browser.newPage();
+  // set viewport to be sure
+  await page.setViewport({ width: 1280, height: 800 });
 
   try {
-    await page.goto("https://snapsave.app/id", {
-      waitUntil: "networkidle2",
-      timeout: 60000
-    });
-
-    // isi input
-    await page.type('input[name="url"]', url);
-
-    // klik tombol download
+    const cleanUrl = url.split("?")[0];
+    
+    // TRY PROVIDER 1: SnapSave
+    console.log("Trying SnapSave...");
+    await page.goto("https://snapsave.app/id", { waitUntil: "networkidle2", timeout: 30000 });
+    await page.waitForSelector('input[name="url"]');
+    await page.type('input[name="url"]', cleanUrl);
     await page.click('button[type="submit"]');
 
-    // tunggu hasil muncul
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    try {
+      await page.waitForSelector(".download-items", { timeout: 10000 });
+      const links = await page.$$eval("a", (els) => 
+        els.map(e => e.href).filter(h => h && (h.includes("cdn") || h.includes("snapdownloader")))
+      );
+      if (links.length > 0) {
+        console.log("SnapSave success");
+        await browser.close();
+        return links;
+      }
+    } catch (e) {
+      console.log("SnapSave failed or timeout, trying next...");
+    }
 
-    // ambil semua link
-    const allLinks = await page.$$eval("a", els => els.map(e => e.href));
+    // TRY PROVIDER 2: SaveVid (successor to SaveIG)
+    console.log("Trying SaveVid...");
+    await page.goto("https://savevid.net/", { waitUntil: "networkidle2", timeout: 30000 });
+    await page.waitForSelector('input#s_input');
+    await page.type('input#s_input', cleanUrl);
+    await page.click('button.btn-default');
 
-    console.log("ALL LINKS:", allLinks);
-
-    // ambil semua link
-    const links = await page.$$eval("a", (elements) =>
-        elements
-            .map((el) => el.href)
-            .filter(
-            (href) =>
-                href &&
-                href.includes("rapidcdn")
-            )
-);
+    try {
+      await page.waitForSelector(".download-items", { timeout: 10000 });
+      const links = await page.$$eval("a", (els) => 
+        els.map(e => e.href).filter(h => h && h.includes("cdn"))
+      );
+      if (links.length > 0) {
+        console.log("SaveVid success");
+        await browser.close();
+        return links;
+      }
+    } catch (e) {
+      console.log("SaveVid failed or timeout");
+    }
 
     await browser.close();
-
-    return links;
+    return [];
 
   } catch (err) {
     console.log("Puppeteer error:", err.message);
-    await browser.close();
+    if (browser) await browser.close();
     return [];
   }
 }
