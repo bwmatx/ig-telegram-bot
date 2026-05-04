@@ -35,33 +35,48 @@ bot.on("message", async (msg) => {
       return bot.sendMessage(chatId, "Link tidak ditemukan 😢");
     }
 
-    const videoUrl = links[0];
+    // Coba satu per satu link yang ditemukan sampai ada yang berhasil
+    let success = false;
+    for (const videoUrl of links) {
+      try {
+        console.log("Mencoba download dari:", videoUrl);
+        const response = await axios.get(videoUrl, {
+          responseType: "stream",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "Referer": "https://snapsave.app/"
+          },
+          timeout: 60000
+        });
 
-    const response = await axios.get(videoUrl, {
-      responseType: "stream",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-        "Referer": "https://snapsave.app/"
-      },
-      timeout: 60000
-    });
+        const contentType = response.headers["content-type"];
+        console.log("Content-Type:", contentType);
 
-    const contentType = response.headers["content-type"];
-    console.log("Content-Type:", contentType);
+        if (contentType && contentType.includes("video")) {
+          await bot.sendVideo(chatId, response.data, {
+            caption: "Berhasil diunduh! 🚀"
+          });
+        } else if (contentType && contentType.includes("image")) {
+          await bot.sendPhoto(chatId, response.data, {
+            caption: "Berhasil diunduh! 🚀"
+          });
+        } else {
+          await bot.sendDocument(chatId, response.data, {
+            caption: "Berhasil diunduh! (Dokumen) 🚀"
+          });
+        }
+        
+        success = true;
+        break; // Berhenti jika berhasil
 
-    if (contentType && contentType.includes("video")) {
-      await bot.sendVideo(chatId, response.data, {
-        caption: "Berhasil diunduh! 🚀"
-      });
-    } else if (contentType && contentType.includes("image")) {
-      await bot.sendPhoto(chatId, response.data, {
-        caption: "Berhasil diunduh! 🚀"
-      });
-    } else {
-      // fallback jika content-type tidak jelas, coba kirim sebagai dokumen
-      await bot.sendDocument(chatId, response.data, {
-        caption: "Berhasil diunduh! (Dokumen) 🚀"
-      });
+      } catch (downloadErr) {
+        console.error("Gagal download dari link ini, mencoba link berikutnya...", downloadErr.message);
+        continue;
+      }
+    }
+
+    if (!success) {
+      bot.sendMessage(chatId, "Gagal mengunduh media dari semua link yang tersedia 😢");
     }
 
   } catch (err) {
