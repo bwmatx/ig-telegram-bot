@@ -57,7 +57,7 @@ bot.on("message", async (msg) => {
       });
     }
 
-    let success = false;
+    let successCount = 0;
     for (const videoUrl of sortedLinks) {
       try {
         console.log("Mencoba download dari:", videoUrl);
@@ -75,10 +75,10 @@ bot.on("message", async (msg) => {
 
         if (contentType && contentType.includes("video")) {
           await bot.sendVideo(chatId, response.data, {
-            caption: "Berhasil diunduh! 🚀"
+            caption: isReel ? "Berhasil diunduh! 🚀" : undefined
           });
-          success = true;
-          break;
+          successCount++;
+          if (isReel) break; // Reel cukup satu saja (video)
         } else if (contentType && contentType.includes("image")) {
           // Jika ini Reel tapi kita malah dapet gambar, coba cari link lain dulu
           if (isReel && sortedLinks.length > 1 && !videoUrl.includes(".mp4")) {
@@ -86,16 +86,19 @@ bot.on("message", async (msg) => {
             continue; 
           }
           await bot.sendPhoto(chatId, response.data, {
-            caption: "Berhasil diunduh! 🚀"
+            caption: isPost ? "Berhasil diunduh! 🚀" : undefined
           });
-          success = true;
-          break;
+          successCount++;
+          if (isPost && !isStory) {
+              // Untuk postingan biasa (p), biasanya satu-satu atau carousel. 
+              // Jika ingin kirim semua, jangan break.
+          }
         } else {
           await bot.sendDocument(chatId, response.data, {
             caption: "Berhasil diunduh! (Dokumen) 🚀"
           });
-          success = true;
-          break;
+          successCount++;
+          if (isReel) break;
         }
 
       } catch (downloadErr) {
@@ -104,8 +107,10 @@ bot.on("message", async (msg) => {
       }
     }
 
-    if (!success) {
+    if (successCount === 0) {
       bot.sendMessage(chatId, "Gagal mengunduh media dari semua link yang tersedia 😢");
+    } else if (isStory || isPost) {
+      bot.sendMessage(chatId, `Berhasil mengunduh ${successCount} media! 🚀`);
     }
 
   } catch (err) {
