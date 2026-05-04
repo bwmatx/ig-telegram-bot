@@ -9,20 +9,6 @@ const bot = new TelegramBot(token, { polling: true });
 // console.log("TOKEN:", process.env.BOT_TOKEN); // Removed for security
 console.log("Bot berjalan...");
 
-// HTTP server untuk Render Free Tier (agar tidak sleep)
-const http = require("http");
-http.createServer((req, res) => {
-  if (req.url === "/health") {
-    res.writeHead(200);
-    res.end("OK");
-  } else {
-    res.writeHead(200);
-    res.end("Bot is running");
-  }
-}).listen(process.env.PORT || 10000, () => {
-  console.log(`Health check server berjalan di port ${process.env.PORT || 10000}`);
-});
-
 const mediaCache = {};
 
 bot.on("callback_query", async (query) => {
